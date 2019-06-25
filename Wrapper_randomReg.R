@@ -186,15 +186,15 @@ cv4_randomReg = function(x, y, nfolds = 10, n_threads = -1, ...){
 #' @return A list of cv results and best mtry.
 #' @examples
 #'
-tune4_randomReg = function(x, y, nfolds = 10, tune_var, tune_grid, n_threads = -1, ...){
+tune4_randomReg = function(x, y, colsample_grid, nfolds = 10, n_threads = -1, ...){
   
-  cv_res = lapply(X = params_grid, FUN=cv4_randomReg, x = x, y = y, nfolds = nfolds, ...) 
+  cv_res = lapply(X = colsample_grid, FUN=cv4_randomReg, x = x, y = y, nfolds = nfolds, ...) 
   
   cv_mean = cv_res %>% lapply(mean) %>% unlist()
   cv_sd = cv_res %>% lapply(sd) %>% unlist()
   cvup = cv_mean + cv_sd
   cvlo = cv_mean - cv_sd
-  cv_result = data.frame(cvm = cv_mean, cvsd = cv_sd, cvup = cvup, cvlo = cvlo)
+  cv_result = data.frame(tune = colsample_grid, cvm = cv_mean, cvsd = cv_sd, cvup = cvup, cvlo = cvlo)
   
   cv_min = min(cv_mean)
   cv_1se = cv_min + sd(cv_sd)
@@ -215,6 +215,26 @@ tune4_randomReg = function(x, y, nfolds = 10, tune_var, tune_grid, n_threads = -
 
 
 
+plot.cv.randomRegression = function(object){
+  
+  if (!inherits(object, "cv.randomRegression"))
+    stop("object not of class cv.randomRegression")
+  
+  cv_result = obj$cv_result
+  if(plot_cv){
+    p <- ggplot(cv_result, aes(x=tune, y=cvm)) + 
+      geom_point(size = 4, colour = "red")+
+      geom_errorbar(aes(ymin=cvlo, ymax=cvup), width=.2, colour = "grey", 
+                    position=position_dodge(0.05)) + 
+      geom_vline(xintercept = mtry_min, linetype = "dashed", color = "grey") +
+      theme(legend.position = "none")
+    print(p)
+  }
+  
+}
+
+
+# TODO; still under construction!!
 
 #' CV Tuning mtry for randomRegression model
 #'
@@ -228,12 +248,34 @@ tune4_randomReg = function(x, y, nfolds = 10, tune_var, tune_grid, n_threads = -
 #' @return A list of cv results and best mtry.
 #' @examples
 #'
-gridSearch_randomReg = function(x, y, nfolds = 10, params_list, n_threads = -1){
+#'
+cv4_randomReg = function(x, y, param_list, nfolds = 10, n_threads = -1){
+  
+  n = nrow(x)
+  p = ncol(x)
+  foldid = createFolds(1:n, k = nfolds)
+  
+  
+  lapply(1:nfolds, function(fold){
+    val_x = x[foldid[[fold]], ]
+    val_y = y[foldid[[fold]]] 
+    train_x = x[-foldid[[fold]], ]
+    train_y = y[-foldid[[fold]]]
+    
+    rr_fit = do.call(randomReg.fit, args = c(list(x = train_x, y = train_y, holdvar = "default"), param_list))
+    predict(rr_fit, newx = val_x, newy = val_y)$rmse
+    
+  }) %>% unlist %>% return()
+  
+}
+
+
+gridSearch_randomReg = function(x, y, nfolds = 10, params_grid, n_threads = -1){
   # TODO:
   # Arguments:
   # Output:
   
-  params_grid = cross(list(colsample = seq(0.1,1,0.1), ) )
+  params_grid = cross(params_grid)
   
   cv_res = lapply(X = params_grid, FUN=cv4_randomReg, x = x, y = y, nfolds = nfolds) 
   
@@ -255,25 +297,6 @@ gridSearch_randomReg = function(x, y, nfolds = 10, params_list, n_threads = -1){
 }
 
 #### make a list of tuning parameters: apply(expand.gird(params_grid), 1, as.list)
-
-
-plot.cv.randomRegression = function(object){
-  
-  if (!inherits(object, "cv.randomRegression"))
-    stop("object not of class cv.randomRegression")
-  
-  cv_result = obj$cv_result
-  if(plot_cv){
-    p <- ggplot(cv_result, aes(x=mtry, y=cvm)) + 
-      geom_point(size = 4, colour = "red")+
-      geom_errorbar(aes(ymin=cvlo, ymax=cvup), width=.2, colour = "grey", 
-                    position=position_dodge(0.05)) + 
-      geom_vline(xintercept = mtry_min, linetype = "dashed", color = "grey") +
-      theme(legend.position = "none")
-    print(p)
-  }
-  
-}
 
 
 #' Gradient Boosting by
