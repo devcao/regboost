@@ -220,16 +220,16 @@ plot.cv.randomRegression = function(object){
   if (!inherits(object, "cv.randomRegression"))
     stop("object not of class cv.randomRegression")
   
-  cv_result = obj$cv_result
-  if(plot_cv){
-    p <- ggplot(cv_result, aes(x=tune, y=cvm)) + 
-      geom_point(size = 4, colour = "red")+
-      geom_errorbar(aes(ymin=cvlo, ymax=cvup), width=.2, colour = "grey", 
-                    position=position_dodge(0.05)) + 
-      geom_vline(xintercept = mtry_min, linetype = "dashed", color = "grey") +
-      theme(legend.position = "none")
-    print(p)
-  }
+  cv_result = object$cv_result
+  
+  p <- ggplot(cv_result, aes(x=tune, y=cvm)) + 
+    geom_point(size = 4, colour = "red")+
+    geom_errorbar(aes(ymin=cvlo, ymax=cvup), width=.2, colour = "grey", 
+                  position=position_dodge(0.05)) + 
+    geom_vline(xintercept = mtry_min, linetype = "dashed", color = "grey") +
+    theme(legend.position = "none")
+  print(p)
+  
   
 }
 
