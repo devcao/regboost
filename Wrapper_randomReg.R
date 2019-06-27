@@ -29,7 +29,7 @@ randomReg.fit = function(x, y,
     
     formula = paste0("~0+", paste(paste0(".^", 2:interaction, collapse="+"))) %>% as.formula()
     x = model.matrix(formula, data = x %>% as.data.frame())
-  
+    
   }
   
   if(is.character(holdvar) && holdvar == "default" && interaction > 1){
@@ -59,27 +59,27 @@ randomReg.fit = function(x, y,
   
   lambda = as.double(lambda); n_reg=as.integer(n_reg); 
   if(missing(colsample)){ colsample = 0.7 }
-
+  
   
   if(n_reg < 1){
     warning("invalid n_reg: reset to default: 500") 
     n_reg = 500L
   }
-    
+  
   
   if (any(is.na(x))) stop("NA not permitted in predictors")
   if (any(is.na(y))) stop("NA not permitted in response")
   
-
+  
   ####
   rd_reg = randomRegression_fit(x = x, y = y, 
-                       subsample = subsample,
-                       colsample = colsample,
-                       n_reg = n_reg, 
-                       holdvar = holdvar,
-                       lambda = lambda,
-                       weight_metric = weight_metric,
-                       intercept = intercept)
+                                subsample = subsample,
+                                colsample = colsample,
+                                n_reg = n_reg, 
+                                holdvar = holdvar,
+                                lambda = lambda,
+                                weight_metric = weight_metric,
+                                intercept = intercept)
   
   ####
   cl <- match.call()
@@ -148,7 +148,7 @@ predict.randomRegression = function(object, newx, newy){
 #' @examples
 #'
 cv4_randomReg = function(x, y, colsample, nfolds = 10, n_threads = -1, ...){
-
+  
   n = nrow(x)
   p = ncol(x)
   foldid = createFolds(1:n, k = nfolds)
@@ -162,7 +162,7 @@ cv4_randomReg = function(x, y, colsample, nfolds = 10, n_threads = -1, ...){
     
     rr_fit = randomReg.fit(x = train_x, y = train_y, colsample = colsample, ...)
     predict(rr_fit, newx = val_x, newy = val_y)$rmse
-
+    
   }) %>% unlist %>% return()
   
 }
@@ -286,8 +286,8 @@ gridSearch_randomReg = function(x, y, nfolds = 10, params_grid, n_threads = -1, 
   
   cv_min = min(cv_mean)
   tune_min = params_grid_list[[which.min(cv_mean)]]
-
-
+  
+  
   return(list(cv_result = cv_result, best_params = tune_min, best_cverr = cv_min ))
   
   
@@ -333,7 +333,8 @@ rfboost = function(x, y, n_rounds = 5, ntree = 500, ...){
 #' @return A vector of predictions for test features
 #' @examples
 #'
-regboost.train = function(x, y, n_rounds = 5, eta = 1, rr_start = TRUE, rr.control, rf.control, watchlist = list()){
+regboost.train = function(x, y, n_rounds = 5, eta = 1, rr_start = TRUE, 
+                          rr.control = list(), rf.control = list(), watchlist = list()){
   
   booster_info = list()
   y_og = y
@@ -349,13 +350,13 @@ regboost.train = function(x, y, n_rounds = 5, eta = 1, rr_start = TRUE, rr.contr
     if(length(watchlist) >0){
       rr_pred = predict(rr_fit, newx=watchlist$xval, newy = watchlist$yval)
       val_err = rr_pred$rmse
+      pred = rr_pred$pred
     }else{
       val_err = NULL
     }
     cat("Now running round ", 1, "training error: ", rr_inSample$rmse, "validation err:", val_err, "\n")#########
     
     re_inSample_pred = rr_inSample$pred
-    pred = rr_pred$pred
     
   }else{
     rr_fit = do.call(randomForest, args = c(list(x = x, y = y), rf.control) )
@@ -367,17 +368,18 @@ regboost.train = function(x, y, n_rounds = 5, eta = 1, rr_start = TRUE, rr.contr
     if(length(watchlist) >0){
       rr_pred = predict(rr_fit, newdata=watchlist$xval, newy = watchlist$yval)
       val_err = metric_fun(y = watchlist$yval, y_hat = rr_pred, metric = "rmse")
+      pred = rr_pred
     }else{
       val_err = NULL
     }
     cat("Now running round ", 1, "training error: ", rr_inSample_rmse, "validation err:", val_err, "\n")#########
     
     re_inSample_pred = rr_inSample
-    pred = rr_pred
+    
     
   }
-    
-
+  
+  
   for(i in 2:n_rounds){
     rf_fit = do.call(randomForest, args = c(list(x = x, y = y), rf.control) )
     booster_info[[i]] = rf_fit
@@ -408,7 +410,7 @@ regboost.train = function(x, y, n_rounds = 5, eta = 1, rr_start = TRUE, rr.contr
   class(out) = "regboost"
   
   return(out)
-
+  
 } 
 
 #' Gradient Boosting by combining randomRegression and randomForest
@@ -440,13 +442,16 @@ cv.regboost = function(x, y, nfolds = 10, early_stopping_rounds = 2, ...){
     cv_rr_fit = do.call(regboost.train, args = c(list(x = x, y = y), rf.control) )
     predict(rr_fit, newx = val_x, newy = val_y)$rmse
     
-    })
+  })
   
-  x, y, n_rounds = 5, eta = 1, rr_start = TRUE, rr.control, rf.control, watchlist = list()
   
 }
 
-cv.regboost = function(x, y, n_rounds = 5, nfolds = 10, n_threads = -1, ...){
+# x, y, n_rounds = 5, eta = 1, rr_start = TRUE, 
+# rr.control, rf.control, watchlist = list()
+
+
+cv4_regboost = function(x, y, params_grid, nfolds = 10, n_threads = -1, ...){
   
   n = nrow(x)
   p = ncol(x)
@@ -471,7 +476,7 @@ cv.regboost = function(x, y, n_rounds = 5, nfolds = 10, n_threads = -1, ...){
 
 
 
-cvgrid_redboost = function(x, y, param_list, nfolds = 10, n_threads = -1, ...){
+cvgrid_regboost = function(x, y, param_list, nfolds = 10, n_threads = -1, ...){
   
   n = nrow(x)
   p = ncol(x)
@@ -484,11 +489,10 @@ cvgrid_redboost = function(x, y, param_list, nfolds = 10, n_threads = -1, ...){
     train_x = x[-foldid[[fold]], ]
     train_y = y[-foldid[[fold]]]
     
-    rr_fit = do.call(randomReg.fit, args = c(list(x = train_x, y = train_y), 
+    regboost_fit = do.call(regboost.train, args = c(list(x = train_x, y = train_y), 
                                              param_list, 
                                              list(...)))
-    predict(rr_fit, newx = val_x, newy = val_y)$rmse
-    
+    predict(regboost_fit, newx = val_x, newy = val_y)$rmse
   }) %>% unlist %>% return()
   
 }
@@ -591,7 +595,6 @@ random_boosting = function(x, y, test_x, reg_try, holdvar, n_reg, n_round, ...){
   pred = pred + rfb_pred
   return(pred)
 }
-
 
 
 
