@@ -64,12 +64,14 @@ List randomRegression_fit(arma::mat x,
   
   if(colsample <= 0 || colsample > 1){
     colsample_size = p;
+    cout << "invalid colsample, reset to 1"<<endl;
   }else{
     colsample_size = ceil(p * colsample); 
   }
   
   if(subsample <= 0 || subsample > 1){
     subsample_size = n;
+    cout << "invalid subsample, reset to 1"<<endl;
   }else{
     subsample_size = ceil(n * subsample); 
   }
@@ -102,7 +104,7 @@ List randomRegression_fit(arma::mat x,
     if ( !any(holdvar == -1) ){
       boot_var = unique(join_cols(boot_var, holdvar));
     }
-      
+    
     mat x_try = x.submat(boot_index, boot_var);
     vec y_try = y.elem(boot_index);
     
@@ -141,8 +143,8 @@ List randomRegression_fit(arma::mat x,
       oob_err(i) = metric_fun(y_oob, oob_pred, weight_metric);
       
     }
-   
-  
+    
+    
     //fittedList[i] = fitted;
     
   }
@@ -152,13 +154,13 @@ List randomRegression_fit(arma::mat x,
   
   
   return List::create(_["inSample_err"] = err,
-                      _["oob_err"] = oob_err,
-                      _["w"] = w,
-                      _["beta"] = betaList,
-                      _["intercept"] = intercept,
-                      _["n_reg"] = n_reg,
-                      _["n"] = n,
-                      _["p"] = p);
+                       _["oob_err"] = oob_err,
+                       _["w"] = w,
+                       _["beta"] = betaList,
+                       _["intercept"] = intercept,
+                       _["n_reg"] = n_reg,
+                       _["n"] = n,
+                       _["p"] = p);
   
 }
 
@@ -194,7 +196,7 @@ vec randomRegression_predict(List randomReg,
 // (useful for testing and development). The R code will be automatically 
 // run after the compilation.
 //
-
-/*** R
+  
+  /*** R
 
 */
