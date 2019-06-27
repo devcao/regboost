@@ -14,11 +14,17 @@
 #' @return An randomRegression object.
 #' @examples
 #'
-randomReg.fit = function(x, y, colsample = 0.7, subsample = 1, holdvar = "default", n_reg = 500, 
-                         lambda = 0.01, weight_metric = "rmse", intercept = TRUE, interaction = 2){
-  
+randomReg.fit = function(x, y, 
+                         colsample = 0.7, subsample = 1, 
+                         holdvar = "default", n_reg = 500, 
+                         lambda = 0.01, weight_metric = "rmse", 
+                         intercept = TRUE, interaction = 2, ...){
   if( !(is.numeric(interaction) && length(interaction) == 1) ) { stop("invalid interaction") }
   
+  cl = as.list(environment()); cat("col: ", cl$colsample, "sub: ", cl$subsample, "n_reg: ", cl$n_reg, "\n");
+  
+  
+  n_pred = ncol(x)
   if (interaction > 1){
     
     formula = paste0("~0+", paste(paste0(".^", 2:interaction, collapse="+"))) %>% as.formula()
@@ -27,7 +33,7 @@ randomReg.fit = function(x, y, colsample = 0.7, subsample = 1, holdvar = "defaul
   }
   
   if(is.character(holdvar) && holdvar == "default" && interaction > 1){
-    holdvar = 0:(ncol(x)-1)
+    holdvar = 0:(n_pred-1)
   }else if (is.character(holdvar) && holdvar == "default" && interaction <= 1){
     holdvar = -1
   }else if (is.character(holdvar) && holdvar == "none"){
@@ -53,16 +59,6 @@ randomReg.fit = function(x, y, colsample = 0.7, subsample = 1, holdvar = "defaul
   
   lambda = as.double(lambda); n_reg=as.integer(n_reg); 
   if(missing(colsample)){ colsample = 0.7 }
-  
-  if (colsample > 1 || colsample <= 0){
-    warning("invalid colsample: reset to default")
-    colsample = 1
-  }
-  
-  if (subsample > 1 || subsample <= 0){
-    warning("invalid subsample: reset to default")
-    subsample = 1
-  }
 
   
   if(n_reg < 1){
@@ -76,7 +72,6 @@ randomReg.fit = function(x, y, colsample = 0.7, subsample = 1, holdvar = "defaul
   
 
   ####
-  
   rd_reg = randomRegression_fit(x = x, y = y, 
                        subsample = subsample,
                        colsample = colsample,
@@ -152,7 +147,7 @@ predict.randomRegression = function(object, newx, newy){
 #' @return A vector contains RMSE for each cv folds.
 #' @examples
 #'
-cv4_randomReg = function(x, y, nfolds = 10, n_threads = -1, ...){
+cv4_randomReg = function(x, y, colsample, nfolds = 10, n_threads = -1, ...){
 
   n = nrow(x)
   p = ncol(x)
@@ -165,7 +160,7 @@ cv4_randomReg = function(x, y, nfolds = 10, n_threads = -1, ...){
     train_x = x[-foldid[[fold]], ]
     train_y = y[-foldid[[fold]]]
     
-    rr_fit = randomReg.fit(x = train_x, y = train_y, holdvar = "default", ...)
+    rr_fit = randomReg.fit(x = train_x, y = train_y, colsample = colsample, ...)
     predict(rr_fit, newx = val_x, newy = val_y)$rmse
 
   }) %>% unlist %>% return()
@@ -198,14 +193,14 @@ tune4_randomReg = function(x, y, colsample_grid, nfolds = 10, n_threads = -1, ..
   
   cv_min = min(cv_mean)
   cv_1se = cv_min + sd(cv_sd)
-  mtry_min = mtry_grid[which.min(cv_mean)]
+  colsample_min = colsample_grid[which.min(cv_mean)]
   
   
   cl <- match.call()
   cl[[1]] <- as.name("cv.randomRegression")
   out = list(call = cl,
              cv_result = cv_result, 
-             mtry_min = mtry_min)
+             colsample_min = colsample_min)
   class(out) = "cv.randomRegression"
   
   return(out)
@@ -224,9 +219,9 @@ plot.cv.randomRegression = function(object){
   
   p <- ggplot(cv_result, aes(x=tune, y=cvm)) + 
     geom_point(size = 4, colour = "red")+
-    geom_errorbar(aes(ymin=cvlo, ymax=cvup), width=.2, colour = "grey", 
+    geom_errorbar(aes(ymin=cvlo, ymax=cvup), colour = "grey", 
                   position=position_dodge(0.05)) + 
-    geom_vline(xintercept = mtry_min, linetype = "dashed", color = "grey") +
+    geom_vline(xintercept = object$colsample_min, linetype = "dashed", color = "grey") +
     theme(legend.position = "none")
   print(p)
   
@@ -249,7 +244,7 @@ plot.cv.randomRegression = function(object){
 #' @examples
 #'
 #'
-cv4_randomReg = function(x, y, param_list, nfolds = 10, n_threads = -1){
+cvgrid_randomReg = function(x, y, param_list, nfolds = 10, n_threads = -1, ...){
   
   n = nrow(x)
   p = ncol(x)
@@ -262,7 +257,9 @@ cv4_randomReg = function(x, y, param_list, nfolds = 10, n_threads = -1){
     train_x = x[-foldid[[fold]], ]
     train_y = y[-foldid[[fold]]]
     
-    rr_fit = do.call(randomReg.fit, args = c(list(x = train_x, y = train_y, holdvar = "default"), param_list))
+    rr_fit = do.call(randomReg.fit, args = c(list(x = train_x, y = train_y), 
+                                             param_list, 
+                                             list(...)))
     predict(rr_fit, newx = val_x, newy = val_y)$rmse
     
   }) %>% unlist %>% return()
@@ -270,28 +267,28 @@ cv4_randomReg = function(x, y, param_list, nfolds = 10, n_threads = -1){
 }
 
 
-gridSearch_randomReg = function(x, y, nfolds = 10, params_grid, n_threads = -1){
+gridSearch_randomReg = function(x, y, nfolds = 10, params_grid, n_threads = -1, ...){
   # TODO:
   # Arguments:
   # Output:
   
-  params_grid = cross(params_grid)
+  params_grid_list = cross(params_grid)
   
-  cv_res = lapply(X = params_grid, FUN=cv4_randomReg, x = x, y = y, nfolds = nfolds) 
+  cv_res = lapply(X = params_grid_list, FUN=cvgrid_randomReg, x = x, y = y, nfolds = nfolds, ...) 
   
   cv_mean = cv_res %>% lapply(mean) %>% unlist()
   cv_sd = cv_res %>% lapply(sd) %>% unlist()
   cvup = cv_mean + cv_sd
   cvlo = cv_mean - cv_sd
-  cv_result = data.frame(cvm = cv_mean, cvsd = cv_sd, cvup = cvup, cvlo = cvlo)
+  cv_result = data.frame(expand.grid(params_grid), cvm = cv_mean, cvsd = cv_sd, cvup = cvup, cvlo = cvlo)
+  #row.names(cv_result) = params_grid
+  
   
   cv_min = min(cv_mean)
-  cv_1se = cv_min + sd(cv_sd)
-  mtry_min = mtry_grid[which.min(cv_mean)]
+  tune_min = params_grid_list[[which.min(cv_mean)]]
 
 
-
-  return(list(cv_result = cv_result, mtry_min = mtry_min))
+  return(list(cv_result = cv_result, best_params = tune_min, best_cverr = cv_min ))
   
   
 }
@@ -406,7 +403,8 @@ regboost.train = function(x, y, n_rounds = 5, eta = 1, rr_start = TRUE, rr.contr
   out = list(call = cl,
              booster_info = booster_info,
              n_rounds = n_rounds, 
-             eta = eta)
+             eta = eta,
+             rr_start = rr_start)
   class(out) = "regboost"
   
   return(out)
@@ -424,8 +422,7 @@ regboost.train = function(x, y, n_rounds = 5, eta = 1, rr_start = TRUE, rr.contr
 #' @return A vector of predictions for test features
 #' @examples
 #'
-regboost.train = function(x, y, nfolds = 10, params = list(),
-                          early_stopping_rounds = 2){
+cv.regboost = function(x, y, nfolds = 10, early_stopping_rounds = 2, ...){
   
   if(length(params) == 0){params = list(n_rounds = 10, eta = 1, 
                                         rr_start = TRUE, 
@@ -448,7 +445,81 @@ regboost.train = function(x, y, nfolds = 10, params = list(),
   x, y, n_rounds = 5, eta = 1, rr_start = TRUE, rr.control, rf.control, watchlist = list()
   
 }
+
+cv.regboost = function(x, y, n_rounds = 5, nfolds = 10, n_threads = -1, ...){
   
+  n = nrow(x)
+  p = ncol(x)
+  foldid = createFolds(1:n, k = nfolds)
+  
+  
+  lapply(1:nfolds, function(fold){
+    val_x = x[foldid[[fold]], ]
+    val_y = y[foldid[[fold]]] 
+    train_x = x[-foldid[[fold]], ]
+    train_y = y[-foldid[[fold]]]
+    
+    rr_fit = regboost.train(x = train_x, 
+                            y = train_y, 
+                            n_rounds = n_rounds, 
+                            watchlist=list(xval = val_x, yval = val_y))
+    predict(rr_fit, newx = val_x, newy = val_y)$rmse
+    
+  }) %>% unlist %>% return()
+  
+}
+
+
+
+cvgrid_redboost = function(x, y, param_list, nfolds = 10, n_threads = -1, ...){
+  
+  n = nrow(x)
+  p = ncol(x)
+  foldid = createFolds(1:n, k = nfolds)
+  
+  
+  lapply(1:nfolds, function(fold){
+    val_x = x[foldid[[fold]], ]
+    val_y = y[foldid[[fold]]] 
+    train_x = x[-foldid[[fold]], ]
+    train_y = y[-foldid[[fold]]]
+    
+    rr_fit = do.call(randomReg.fit, args = c(list(x = train_x, y = train_y), 
+                                             param_list, 
+                                             list(...)))
+    predict(rr_fit, newx = val_x, newy = val_y)$rmse
+    
+  }) %>% unlist %>% return()
+  
+}
+
+
+gridSearch_regboost = function(x, y, nfolds = 10, params_grid, n_threads = -1, ...){
+  # TODO:
+  # Arguments:
+  # Output:
+  
+  params_grid_list = cross(params_grid)
+  
+  cv_res = lapply(X = params_grid_list, FUN=cvgrid_randomReg, x = x, y = y, nfolds = nfolds, ...) 
+  
+  cv_mean = cv_res %>% lapply(mean) %>% unlist()
+  cv_sd = cv_res %>% lapply(sd) %>% unlist()
+  cvup = cv_mean + cv_sd
+  cvlo = cv_mean - cv_sd
+  cv_result = data.frame(expand.grid(params_grid), cvm = cv_mean, cvsd = cv_sd, cvup = cvup, cvlo = cvlo)
+  #row.names(cv_result) = params_grid
+  
+  
+  cv_min = min(cv_mean)
+  tune_min = params_grid_list[[which.min(cv_mean)]]
+  
+  
+  return(list(cv_result = cv_result, best_params = tune_min, best_cverr = cv_min ))
+  
+  
+}
+
 
 
 #' Gradient Boosting by combining randomRegression and randomForest
@@ -469,14 +540,16 @@ predict.regboost = function(object, newx, newy){
   
   eta = object$eta
   booster_info = object$booster_info
-
-
-  pred = predict(booster_info[[1]], newx)$pred
+  
+  if(object$rr_start){
+    pred = predict(booster_info[[1]], newx)$pred
+  }else{
+    pred = predict(booster_info[[1]], newx)
+  }
   #pred = 0
   
   for(i in 2:object$n_rounds){
     pred = pred + predict(booster_info[[i]], newx) * eta
-    cat(metric_fun(newy, pred, metric = "rmse"), "\n")
   }
   
   if (!missing(newy)) {
